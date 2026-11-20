@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ratchet Chat</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface-2: #f0f2f5;
+    --border: #e1e4e8;
+    --text: #1c2128;
+    --muted: #636c76;
+    --accent: #5b4bdb;
+    --accent-soft: #ece9ff;
+    --bubble-me: #5b4bdb;
+    --bubble-me-text: #ffffff;
+    --bubble-them: #eef0f3;
+    --ok: #1a7f37;
+    --ok-soft: #dafbe1;
+    --bad: #cf222e;
+    --bad-soft: #ffebe9;
+    --warn: #9a6700;
+    --warn-soft: #fff8c5;
+    --gov: #8250df;
+    --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216;
+      --surface: #171b21;
+      --surface-2: #1f242b;
+      --border: #2d333b;
+      --text: #e6edf3;
+      --muted: #8d96a0;
+      --accent: #9d8cff;
+      --accent-soft: #241f45;
+      --bubble-me: #6c5ce7;
+      --bubble-them: #252b33;
+      --ok: #3fb950;
+      --ok-soft: #12261a;
+      --bad: #ff7b72;
+      --bad-soft: #2d1416;
+      --warn: #d29922;
+      --warn-soft: #2b2111;
+      --gov: #c297ff;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; color: #fff; }
+  .spacer { flex: 1; }
+  .seg { display: flex; gap: 3px; background: var(--surface-2); padding: 3px; border-radius: 10px; }
+  .seg button { border: none; background: transparent; color: var(--muted); padding: 6px 12px; }
+  .seg button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px; padding: 7px 12px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text); white-space: nowrap;
+  }
+  button:hover { background: var(--surface-2); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.small { padding: 4px 9px; font-size: 12px; }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: default; }
+  .toggle { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; user-select: none; }
+  .toggle input { display: none; }
+  .toggle .track { width: 36px; height: 20px; border-radius: 999px; background: var(--border); position: relative; transition: .15s; }
+  .toggle .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: .15s; }
+  .toggle input:checked + .track { background: var(--warn); }
+  .toggle input:checked + .track::after { left: 18px; }
+
+  main {
+    display: grid; gap: 16px; padding: 16px 20px; max-width: 1500px; margin: 0 auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(320px, 0.95fr);
+    grid-template-areas: "a b insp" "net net insp";
+  }
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 1fr 1fr; grid-template-areas: "a b" "net net" "insp insp"; }
+  }
+  @media (max-width: 700px) {
+    main { grid-template-columns: 1fr; grid-template-areas: "a" "b" "net" "insp"; padding: 12px 16px; }
+  }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .card-h { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .card-h h2 { margin: 0; font-size: 14px; }
+  .card-b { padding: 14px; }
+
+  .phone { display: flex; flex-direction: column; height: 520px; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; flex: none; }
+  .who { line-height: 1.25; }
+  .who b { display: block; font-size: 15px; }
+  .who span { font-size: 12px; color: var(--muted); }
+  .thread { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .bubble-row { display: flex; flex-direction: column; max-width: 82%; }
+  .bubble-row.me { align-self: flex-end; align-items: flex-end; }
+  .bubble-row.them { align-self: flex-start; align-items: flex-start; }
+  .bubble {
+    padding: 8px 12px; border-radius: 16px; cursor: pointer; word-wrap: break-word; max-width: 100%;
+    border: 2px solid transparent; transition: border-color .1s;
+  }
+  .me .bubble { background: var(--bubble-me); color: var(--bubble-me-text); border-bottom-right-radius: 5px; }
+  .them .bubble { background: var(--bubble-them); border-bottom-left-radius: 5px; }
+  .bubble.selected { border-color: var(--warn); }
+  .bubble.ghost { opacity: .55; }
+  .tick { font-size: 11px; color: var(--muted); margin-top: 2px; padding: 0 4px; }
+  .tick.bad { color: var(--bad); }
+  .tick.warn { color: var(--warn); }
+  .ratchet-divider { align-self: center; font-size: 11px; color: var(--muted); background: var(--surface-2); padding: 2px 10px; border-radius: 999px; margin: 6px 0; }
+  .composer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
+  .composer input {
+    flex: 1; font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid transparent;
+    border-radius: 999px; padding: 9px 14px; outline: none;
+  }
+  .composer input:focus { border-color: var(--accent); background: var(--surface); }
+  .composer button { border-radius: 999px; }
+  .empty { color: var(--muted); text-align: center; margin: auto; font-size: 13px; padding: 20px; }
+
+  .net { grid-area: net; }
+  .net-list { display: grid; gap: 8px; }
+  .packet { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px dashed var(--warn); background: var(--warn-soft); border-radius: 10px; }
+  .packet .route { font-weight: 600; }
+  .packet .ct { font-family: var(--mono); font-size: 11px; color: var(--muted); flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .packet .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .insp { grid-area: insp; display: grid; gap: 16px; align-content: start; }
+  .kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; font-size: 13px; align-items: baseline; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .section-t { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; margin: 14px 0 8px; }
+  .section-t:first-child { margin-top: 0; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; padding: 1px 8px 1px 4px; border-radius: 999px; background: var(--surface-2); }
+  .chip i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .gov-box { border: 1px solid var(--gov); border-radius: 10px; padding: 10px 12px; }
+  .gov-box b { color: var(--gov); }
+  .sessions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .sess { background: var(--surface-2); border-radius: 10px; padding: 10px; font-size: 12px; }
+  .sess h4 { margin: 0 0 8px; font-size: 13px; }
+  .sess .line { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 5px; }
+  .sess .line span:first-child { color: var(--muted); }
+  .counters { display: flex; gap: 6px; margin-bottom: 8px; }
+  .counter { flex: 1; text-align: center; background: var(--surface); border-radius: 8px; padding: 4px; }
+  .counter b { display: block; font-size: 16px; }
+  .counter span { font-size: 10px; color: var(--muted); }
+  .hint { font-size: 12px; color: var(--muted); }
+  .log { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; font-size: 12px; }
+  .log li { padding: 5px 0; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+  .log li:first-child { border-top: none; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: none; background: var(--muted); }
+  .dot.ok { background: var(--ok); }
+  .dot.bad { background: var(--bad); }
+  .dot.blocked { background: var(--warn); }
+  .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  .badge.bad { background: var(--bad-soft); color: var(--bad); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .badge.muted { background: var(--surface-2); color: var(--muted); }
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px;
+    opacity: 0; transition: .2s; pointer-events: none; max-width: calc(100% - 32px);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.err { background: var(--bad); color: #fff; }
+  #toast.good { background: var(--ok); color: #fff; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo" aria-hidden="true">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+  </div>
+  <h1>Ratchet Chat</h1>
+  <div class="seg" id="pairs"></div>
+  <div class="spacer"></div>
+  <label class="toggle" title="When on, sent messages wait in the network so you can reorder, tamper with or drop them">
+    <input type="checkbox" id="holdToggle"><span class="track"></span> Intercept network
+  </label>
+  <button id="resetBtn">Reset</button>
+</header>
+
+<main>
+  <section class="card phone" id="paneA" style="grid-area:a"></section>
+  <section class="card phone" id="paneB" style="grid-area:b"></section>
+
+  <section class="card net">
+    <div class="card-h">
+      <h2>Network</h2>
+      <span id="netCount" class="badge muted">0 in flight</span>
+      <div class="spacer"></div>
+      <span class="hint" id="netHint"></span>
+    </div>
+    <div class="card-b"><div class="net-list" id="netList"></div></div>
+  </section>
+
+  <aside class="insp">
+    <section class="card">
+      <div class="card-h"><h2>Message inspector</h2><div class="spacer"></div><span id="inspBadge"></span></div>
+      <div class="card-b" id="inspector"></div>
+    </section>
+    <section class="card">
+      <div class="card-h"><h2>Double Ratchet state</h2></div>
+      <div class="card-b">
+        <div class="sessions" id="sessions"></div>
+        <p class="hint" style="margin:10px 0 0">Matching colours mean both sides hold the same key. A new <b>ratchet key</b> colour is a DH ratchet step. The <b>chain keys</b> change with every message.</p>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-h"><h2>Event log</h2></div>
+      <div class="card-b"><ul class="log" id="log"></ul></div>
+    </section>
+  </aside>
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const COLORS = { Alice: '#e8590c', Bob: '#1c7ed6', Carol: '#2f9e44' }
+let state = null
+let pair = ['Alice', 'Bob']
+let selectedId = null
+let hold = false
+try { hold = localStorage.getItem('hold') === '1' } catch (e) {}
+$('holdToggle').checked = hold
+
+function esc (s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) }
+
+let toastTimer
+function toast (msg, kind) {
+  const t = $('toast')
+  t.textContent = msg
+  t.className = 'show ' + (kind || '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { t.className = '' }, 3000)
+}
+
+async function api (path, body) {
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Request failed')
+  return data
+}
+
+function chip (fp, label) {
+  if (!fp) return '<span class="chip"><i style="background:var(--border)"></i>none</span>'
+  const hue = parseInt(fp.slice(0, 4), 16) % 360
+  return `<span class="chip" title="${esc(label || '')} fingerprint ${fp}"><i style="background:hsl(${hue} 70% 55%)"></i>${fp.slice(0, 8)}</span>`
+}
+
+function time (t) { return new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }
+
+function pairMessages () {
+  return state.messages.filter((m) => (m.from === pair[0] && m.to === pair[1]) || (m.from === pair[1] && m.to === pair[0]))
+}
+
+function renderPairs () {
+  const users = state.users
+  const pairs = []
+  for (let i = 0; i < users.length; i++) for (let j = i + 1; j < users.length; j++) pairs.push([users[i], users[j]])
+  $('pairs').innerHTML = pairs.map((p) => {
+    const active = p[0] === pair[0] && p[1] === pair[1]
+    return `<button class="${active ? 'active' : ''}" data-pair="${p.join(',')}">${p[0]} ↔ ${p[1]}</button>`
+  }).join('')
+}
+
+function renderPane (el, me, them) {
+  const msgs = pairMessages()
+  let lastSender = null
+  const rows = []
+  for (const m of msgs) {
+    const mine = m.from === me
+    // Show only what this user has actually seen: own sends, plus received messages once delivered.
+    if (!mine && m.status !== 'delivered') continue
+    if (lastSender !== null && lastSender !== m.from) rows.push('<div class="ratchet-divider">↻ DH ratchet step</div>')
+    lastSender = m.from
+    let tick = ''
+    if (mine) {
+      tick = {
+        'in-flight': '<div class="tick warn">⏳ held in network</div>',
+        delivered: `<div class="tick">✓ delivered · #${m.id}</div>`,
+        dropped: '<div class="tick bad">✕ dropped by network</div>',
+        failed: '<div class="tick bad">✕ rejected by recipient</div>'
+      }[m.status]
+    } else {
+      tick = `<div class="tick">#${m.id} · ${time(m.deliveredAt)}</div>`
+    }
+    const ghost = mine && m.status !== 'delivered' ? ' ghost' : ''
+    const sel = m.id === selectedId ? ' selected' : ''
+    rows.push(`<div class="bubble-row ${mine ? 'me' : 'them'}"><div class="bubble${ghost}${sel}" data-id="${m.id}">${esc(mine ? m.text : m.receivedText)}</div>${tick}</div>`)
+  }
+  el.innerHTML = `
+    <div class="card-h">
+      <div class="avatar" style="background:${COLORS[me]}">${me[0]}</div>
+      <div class="who"><b>${me}</b><span>chatting with ${them}</span></div>
+    </div>
+    <div class="thread">${rows.length ? rows.join('') : `<div class="empty">No messages yet.<br>Say hi to ${them}.</div>`}</div>
+    <form class="composer" data-from="${me}" data-to="${them}">
+      <input placeholder="Message ${them}…" autocomplete="off" aria-label="Message from ${me} to ${them}">
+      <button class="primary" type="submit">Send</button>
+    </form>`
+  const thread = el.querySelector('.thread')
+  thread.scrollTop = thread.scrollHeight
+}
+
+function renderNetwork () {
+  const inflight = state.messages.filter((m) => m.status === 'in-flight')
+  $('netCount').textContent = `${inflight.length} in flight`
+  $('netCount').className = 'badge ' + (inflight.length ? 'warn' : 'muted')
+  $('netHint').textContent = hold
+    ? 'You are the network. Deliver in any order, tamper, or drop.'
+    : 'Messages are delivered instantly. Turn on “Intercept network” to play the attacker.'
+  $('netList').innerHTML = inflight.length === 0
+    ? `<div class="empty" style="padding:8px">${hold ? 'Send a message and it will wait here.' : 'Nothing in flight.'}</div>`
+    : inflight.map((m) => `
+      <div class="packet">
+        <span class="badge warn">#${m.id}</span>
+        <span class="route">${m.from} → ${m.to}</span>
+        <span class="ct" title="ciphertext">${m.wire.ciphertext}</span>
+        <div class="acts">
+          <button class="small primary" data-act="deliver" data-id="${m.id}">Deliver</button>
+          <button class="small" data-act="tamper-ciphertext" data-id="${m.id}">Flip a ciphertext bit</button>
+          <button class="small" data-act="tamper-header" data-id="${m.id}">Edit header</button>
+          <button class="small danger" data-act="drop" data-id="${m.id}">Drop</button>
+          <button class="small" data-act="inspect" data-id="${m.id}">Inspect</button>
+        </div>
+      </div>`).join('')
+}
+
+function renderInspector () {
+  const m = state.messages.find((x) => x.id === selectedId)
+  if (!m) {
+    $('inspBadge').innerHTML = ''
+    $('inspector').innerHTML = '<p class="hint" style="margin:0">Click any message bubble or packet to see what was actually sent over the wire.</p>'
+    return
+  }
+  const badge = { 'in-flight': ['warn', 'in flight'], delivered: ['ok', 'delivered'], dropped: ['bad', 'dropped'], failed: ['bad', 'rejected'] }[m.status]
+  $('inspBadge').innerHTML = `<span class="badge ${badge[0]}">#${m.id} ${badge[1]}</span>`
+  const w = m.wire
+  $('inspector').innerHTML = `
+    <div class="section-t">${m.from} → ${m.to}</div>
+    <div style="margin-bottom:10px">“${esc(m.text)}”</div>
+    <div class="section-t">Header (authenticated as GCM associated data)</div>
+    <dl class="kv">
+      <dt>dh</dt><dd>${chip(w.dh, 'sender ratchet key')} sender's ratchet public key</dd>
+      <dt>n</dt><dd>${w.n} <span class="hint">· message number in this sending chain</span></dd>
+      <dt>pn</dt><dd>${w.pn} <span class="hint">· length of the sender's previous chain</span></dd>
+      <dt>receiverIV</dt><dd>${w.receiverIV}</dd>
+      <dt>vGov</dt><dd>${chip(w.vGov, 'ephemeral ElGamal key')} ephemeral key for escrow</dd>
+      <dt>ivGov</dt><dd>${w.ivGov}</dd>
+      <dt>cGov</dt><dd>${w.cGov}</dd>
+    </dl>
+    <div class="section-t">Ciphertext · ${w.ciphertextBytes} bytes</div>
+    <dl class="kv"><dt>AES-GCM</dt><dd>${w.ciphertext}</dd></dl>
+    <div class="section-t">Government view</div>
+    <div class="gov-box">
+      <b>Escrow decryption:</b> “${esc(m.gov.plaintext)}”
+      <div class="hint" style="margin-top:4px">Recovered message key <span style="font-family:var(--mono)">${m.gov.messageKey.slice(0, 24)}…</span> from cGov using the government's secret key. It unlocks this one message only.</div>
+    </div>
+    ${m.status === 'failed' ? `<p class="badge bad" style="display:inline-block;margin-top:10px">${esc(m.error)}</p>` : ''}
+    ${m.status === 'delivered'
+      ? `<div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="small" data-act="replay" data-id="${m.id}">Replay to ${m.to}</button><span class="hint">Send the exact same packet again.</span></div>`
+      : ''}`
+}
+
+function sessBox (me, them) {
+  const s = state.sessions[me] && state.sessions[me][them]
+  if (!s) return `<div class="sess"><h4>${me}</h4><div class="hint">No session with ${them} yet. One is created on the first message.</div></div>`
+  return `<div class="sess">
+    <h4>${me}'s view</h4>
+    <div class="counters">
+      <div class="counter"><b>${s.Ns}</b><span>sent (Ns)</span></div>
+      <div class="counter"><b>${s.Nr}</b><span>recv (Nr)</span></div>
+      <div class="counter"><b>${s.PN}</b><span>prev (PN)</span></div>
+    </div>
+    <div class="line"><span>Root key</span>${chip(s.rootKey, 'root key')}</div>
+    <div class="line"><span>My ratchet key</span>${chip(s.myRatchetKey, 'my ratchet key')}</div>
+    <div class="line"><span>Their ratchet key</span>${chip(s.theirRatchetKey, 'their ratchet key')}</div>
+    <div class="line"><span>Sending chain</span>${chip(s.sendChain, 'sending chain key')}</div>
+    <div class="line"><span>Receiving chain</span>${chip(s.recvChain, 'receiving chain key')}</div>
+    <div class="line"><span>Skipped keys</span><b>${s.skipped}</b></div>
+  </div>`
+}
+
+function renderSessions () {
+  $('sessions').innerHTML = sessBox(pair[0], pair[1]) + sessBox(pair[1], pair[0])
+}
+
+function renderLog () {
+  $('log').innerHTML = state.log.map((l) => `<li><span class="dot ${l.kind}"></span><span>${esc(l.text)}</span></li>`).join('') || '<li class="hint">Nothing yet.</li>'
+}
+
+function render () {
+  renderPairs()
+  renderPane($('paneA'), pair[0], pair[1])
+  renderPane($('paneB'), pair[1], pair[0])
+  renderNetwork()
+  renderInspector()
+  renderSessions()
+  renderLog()
+}
+
+function apply (data) { state = data; render() }
+
+$('pairs').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-pair]')
+  if (!b) return
+  pair = b.dataset.pair.split(',')
+  selectedId = null
+  render()
+})
+
+document.addEventListener('submit', async (e) => {
+  const form = e.target.closest('form.composer')
+  if (!form) return
+  e.preventDefault()
+  const input = form.querySelector('input')
+  const text = input.value.trim()
+  if (!text) return
+  input.value = ''
+  try {
+    const data = await api('/api/send', { from: form.dataset.from, to: form.dataset.to, text, autoDeliver: !hold })
+    selectedId = data.messages[data.messages.length - 1].id
+    apply(data)
+    const pane = form.dataset.from === pair[0] ? $('paneA') : $('paneB')
+    pane.querySelector('input').focus()
+  } catch (err) { toast(err.message, 'err') }
+})
+
+document.addEventListener('click', async (e) => {
+  const bubble = e.target.closest('.bubble[data-id]')
+  if (bubble) { selectedId = Number(bubble.dataset.id); render(); return }
+
+  const b = e.target.closest('button[data-act]')
+  if (!b) return
+  const id = Number(b.dataset.id)
+  const act = b.dataset.act
+  if (act === 'inspect') { selectedId = id; render(); return }
+  b.disabled = true
+  try {
+    if (act === 'drop') {
+      apply(await api('/api/drop', { id }))
+      toast(`#${id} dropped. Later messages still decrypt (skipped keys).`)
+      return
+    }
+    const mode = act === 'deliver' ? undefined : act
+    const data = await api('/api/deliver', { id, mode })
+    selectedId = id
+    apply(data)
+    const r = data.result
+    if (mode && r.rejected) toast(`Attack blocked: ${r.reason}`, 'good')
+    else if (mode) toast('The attack was accepted. That is a bug!', 'err')
+    else if (!r.ok) toast(`Delivery failed: ${r.reason}`, 'err')
+  } catch (err) { toast(err.message, 'err') } finally { b.disabled = false }
+})
+
+$('holdToggle').addEventListener('change', () => {
+  hold = $('holdToggle').checked
+  try { localStorage.setItem('hold', hold ? '1' : '0') } catch (e) {}
+  renderNetwork()
+})
+
+$('resetBtn').addEventListener('click', async () => {
+  selectedId = null
+  apply(await api('/api/reset'))
+  toast('Fresh keys and certificates generated')
+})
+
+api('/api/state').then(apply).catch((e) => toast(e.message, 'err'))
+</script>
+</body>
+</html>

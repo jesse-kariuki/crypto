@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keychain Vault</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #f0f2f5;
+    --border: #e1e4e8;
+    --text: #1c2128;
+    --muted: #636c76;
+    --accent: #3b5bdb;
+    --accent-soft: #e7ecff;
+    --ok: #1a7f37;
+    --ok-soft: #dafbe1;
+    --bad: #cf222e;
+    --bad-soft: #ffebe9;
+    --warn: #9a6700;
+    --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216;
+      --surface: #171b21;
+      --surface-2: #1f242b;
+      --border: #2d333b;
+      --text: #e6edf3;
+      --muted: #8d96a0;
+      --accent: #7c9cff;
+      --accent-soft: #1d2645;
+      --ok: #3fb950;
+      --ok-soft: #12261a;
+      --bad: #ff7b72;
+      --bad-soft: #2d1416;
+      --warn: #d29922;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; color: #fff; }
+  .spacer { flex: 1; }
+  .pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; font-weight: 600; }
+  .pill.locked { background: var(--surface-2); color: var(--muted); }
+  .pill.open { background: var(--ok-soft); color: var(--ok); }
+  main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; }
+  .card h2 { font-size: 15px; margin: 0 0 4px; }
+  .card .sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .stack { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+  .card { min-width: 0; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } main { padding: 16px; } }
+
+  label { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+  input, textarea, select {
+    width: 100%; font: inherit; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; outline: none;
+  }
+  textarea { font-family: var(--mono); font-size: 12px; min-height: 110px; resize: vertical; }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .field { margin-bottom: 14px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > input { flex: 1; }
+
+  button {
+    font: inherit; font-weight: 600; font-size: 14px; cursor: pointer;
+    border-radius: 8px; padding: 9px 14px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); white-space: nowrap;
+  }
+  button:hover { background: var(--surface-2); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.danger { color: var(--bad); }
+  button.ghost { border-color: transparent; background: transparent; padding: 6px 8px; }
+  button.ghost:hover { background: var(--surface-2); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.full { width: 100%; }
+
+  .tabs { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 10px; margin-bottom: 18px; }
+  .tabs button { flex: 1; border: none; background: transparent; color: var(--muted); }
+  .tabs button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+
+  .welcome { max-width: 460px; margin: 40px auto; }
+  .welcome .hero { text-align: center; margin-bottom: 22px; }
+  .welcome .hero .logo { width: 52px; height: 52px; border-radius: 14px; margin: 0 auto 12px; font-size: 24px; }
+  .welcome .hero h2 { margin: 0 0 6px; font-size: 22px; }
+  .welcome .hero p { margin: 0; color: var(--muted); }
+
+  .sites { list-style: none; margin: 0; padding: 0; }
+  .site { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-top: 1px solid var(--border); }
+  .site:first-child { border-top: none; }
+  .favicon { width: 32px; height: 32px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 700; flex: none; }
+  .site .meta { flex: 1; min-width: 0; }
+  .site .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .site .secret { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .empty { color: var(--muted); text-align: center; padding: 24px 8px; font-size: 14px; }
+
+  .code {
+    font-family: var(--mono); font-size: 12px; background: var(--surface-2); border-radius: 8px;
+    padding: 12px; overflow: auto; max-height: 340px; white-space: pre; margin: 0;
+  }
+  .code .k { color: var(--accent); }
+  .code .s { color: var(--ok); }
+  .stats { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .stat { background: var(--surface-2); border-radius: 8px; padding: 8px 12px; flex: 1; min-width: 110px; }
+  .stat b { display: block; font-size: 18px; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .checksum { font-family: var(--mono); font-size: 12px; word-break: break-all; background: var(--surface-2); padding: 8px 10px; border-radius: 8px; }
+
+  .attack { border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+  .attack h3 { margin: 0 0 4px; font-size: 14px; }
+  .attack p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+  .result { margin-top: 10px; font-size: 13px; padding: 8px 10px; border-radius: 8px; display: none; }
+  .result.ok { display: block; background: var(--ok-soft); color: var(--ok); }
+  .result.bad { display: block; background: var(--bad-soft); color: var(--bad); }
+
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  details summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+  details[open] summary { margin-bottom: 12px; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px;
+    font-size: 14px; opacity: 0; transition: .2s; pointer-events: none; max-width: calc(100% - 32px);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.err { background: var(--bad); color: #fff; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+  </div>
+  <h1>Keychain Vault</h1>
+  <span id="statusPill" class="pill locked">Locked</span>
+  <div class="spacer"></div>
+  <button id="exportBtn" class="hidden">Export vault</button>
+  <button id="lockBtn" class="hidden">Lock</button>
+</header>
+
+<main>
+  <!-- Locked: create or open a vault -->
+  <section id="lockedView" class="welcome">
+    <div class="hero">
+      <div class="logo" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </div>
+      <h2>Your passwords, encrypted</h2>
+      <p>One master password protects every site. Nothing is stored in the clear.</p>
+    </div>
+    <div class="card">
+      <div class="tabs" role="tablist">
+        <button class="active" data-tab="create">Create new vault</button>
+        <button data-tab="open">Open saved vault</button>
+      </div>
+
+      <form id="createForm">
+        <div class="field">
+          <label for="newPw">Master password</label>
+          <input id="newPw" type="password" autocomplete="new-password" placeholder="Something long and memorable" required>
+        </div>
+        <div class="field">
+          <label for="newPw2">Confirm master password</label>
+          <input id="newPw2" type="password" autocomplete="new-password" required>
+        </div>
+        <button class="primary full" type="submit">Create vault</button>
+        <p class="hint">Keys are derived with PBKDF2 (100,000 iterations), so this takes a moment.</p>
+      </form>
+
+      <form id="openForm" class="hidden">
+        <div class="field">
+          <label for="vaultFile">Vault file</label>
+          <div class="row">
+            <input id="vaultFile" type="file" accept=".json,application/json">
+          </div>
+          <button type="button" id="useLastBtn" class="ghost hidden" style="margin-top:6px">Use the vault exported in this browser</button>
+        </div>
+        <div class="field">
+          <label for="reprInput">…or paste the vault contents</label>
+          <textarea id="reprInput" placeholder='{"salt":"…","verifier":{…},"kvs":{…}}'></textarea>
+        </div>
+        <div class="field">
+          <label for="checksumInput">Trusted checksum <span style="font-weight:400;color:var(--muted)">(optional, detects rollback)</span></label>
+          <input id="checksumInput" placeholder="SHA-256, Base64" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="openPw">Master password</label>
+          <input id="openPw" type="password" autocomplete="current-password" required>
+        </div>
+        <button class="primary full" type="submit">Unlock vault</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Unlocked -->
+  <section id="openView" class="grid hidden">
+    <div class="stack">
+      <div class="card">
+        <h2>Save a password</h2>
+        <p class="sub">Saving to a site that already exists updates its password.</p>
+        <form id="setForm">
+          <div class="field">
+            <label for="siteInput">Website</label>
+            <input id="siteInput" placeholder="www.example.com" autocomplete="off" required>
+          </div>
+          <div class="field">
+            <label for="valueInput">Password</label>
+            <div class="row">
+              <input id="valueInput" type="password" autocomplete="off" maxlength="64" placeholder="Up to 64 characters">
+              <button type="button" id="toggleValue" class="ghost" title="Show / hide">Show</button>
+              <button type="button" id="genBtn" title="Generate a strong password">Generate</button>
+            </div>
+          </div>
+          <button class="primary" type="submit">Save password</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:4px">
+          <h2 style="margin:0">Saved sites</h2>
+          <span id="siteCount" class="pill locked">0</span>
+        </div>
+        <p class="sub">The vault only stores HMACs of site names. This list is remembered by your browser so you can click through it.</p>
+        <ul id="sites" class="sites"></ul>
+        <form id="lookupForm" class="row" style="margin-top:14px">
+          <input id="lookupInput" placeholder="Look up any site by name…" autocomplete="off">
+          <button type="submit">Look up</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="card">
+        <h2>What gets written to disk</h2>
+        <p class="sub">This is the output of <code>dump()</code>, exactly what an attacker who steals the file would see.</p>
+        <div class="stats">
+          <div class="stat"><b id="statEntries">0</b><span>encrypted entries</span></div>
+          <div class="stat"><b id="statLen">—</b><span>bytes per ciphertext</span></div>
+        </div>
+        <pre id="dumpView" class="code"></pre>
+        <label style="margin-top:14px">Trusted checksum (SHA-256)</label>
+        <div id="checksumView" class="checksum"></div>
+        <p class="hint">Keep this somewhere the attacker can't reach, like a USB stick. Loading with it detects rollback.</p>
+      </div>
+
+      <div class="card">
+        <details>
+          <summary>Attack lab: try to break the vault</summary>
+          <div class="attack">
+            <h3>Swap attack</h3>
+            <p>Swap the encrypted values of two entries in the file, then load it <em>without</em> the checksum and ask for each site.</p>
+            <div class="row" style="flex-wrap:wrap">
+              <select id="swapA"></select><select id="swapB"></select>
+              <button id="swapBtn">Run</button>
+            </div>
+            <div id="swapResult" class="result"></div>
+          </div>
+          <div class="attack">
+            <h3>Rollback attack</h3>
+            <p>Replace the file with the version from before your last change, then load it with the current trusted checksum.</p>
+            <button id="rollbackBtn">Run</button>
+            <div id="rollbackResult" class="result"></div>
+          </div>
+          <div class="attack">
+            <h3>Wrong master password</h3>
+            <p>Try to unlock the current file with a guessed password.</p>
+            <div class="row"><input id="guessPw" placeholder="password123"><button id="guessBtn">Run</button></div>
+            <div id="guessResult" class="result"></div>
+          </div>
+          <p class="hint">The swap and rollback attacks need your master password to reload the file.</p>
+          <div class="field" style="margin:8px 0 0"><input id="attackPw" type="password" placeholder="Your master password"></div>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = (id) => document.getElementById(id)
+let state = { open: false }
+let revealed = {}
+
+function store (key, value) { try { localStorage.setItem(key, JSON.stringify(value)) } catch (e) {} }
+function recall (key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback } catch (e) { return fallback } }
+
+// Site names are tracked per vault (by salt), purely client-side.
+function siteKey () { return 'sites:' + (state.contents ? state.contents.salt : '') }
+function siteNames () { return recall(siteKey(), []) }
+function saveSiteNames (names) { store(siteKey(), names) }
+
+let toastTimer
+function toast (msg, err) {
+  const t = $('toast')
+  t.textContent = msg
+  t.className = 'show' + (err ? ' err' : '')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { t.className = '' }, 2600)
+}
+
+async function api (path, body) {
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Request failed')
+  return data
+}
+
+async function busy (button, fn) {
+  const label = button.textContent
+  button.disabled = true
+  button.textContent = 'Working…'
+  try { return await fn() } catch (e) { toast(e.message, true) } finally { button.disabled = false; button.textContent = label }
+}
+
+function escapeHtml (s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) }
+
+function highlight (obj) {
+  const json = escapeHtml(JSON.stringify(obj, null, 2))
+  return json.replace(/(&quot;[^&]*?&quot;)(\s*:)?/g, (m, str, colon) => colon ? `<span class="k">${str}</span>${colon}` : `<span class="s">${str}</span>`)
+}
+
+function render () {
+  $('lockedView').classList.toggle('hidden', state.open)
+  $('openView').classList.toggle('hidden', !state.open)
+  $('lockBtn').classList.toggle('hidden', !state.open)
+  $('exportBtn').classList.toggle('hidden', !state.open)
+  $('statusPill').textContent = state.open ? 'Unlocked' : 'Locked'
+  $('statusPill').className = 'pill ' + (state.open ? 'open' : 'locked')
+  $('useLastBtn').classList.toggle('hidden', !recall('lastExport', null))
+  if (!state.open) return
+
+  const kvs = state.contents.kvs
+  const entries = Object.values(kvs)
+  $('statEntries').textContent = entries.length
+  $('statLen').textContent = entries.length ? atob(entries[0].ct).length : '—'
+  $('dumpView').innerHTML = highlight(state.contents)
+  $('checksumView').textContent = state.checksum
+
+  const names = siteNames()
+  $('siteCount').textContent = names.length
+  $('sites').innerHTML = names.length === 0
+    ? '<li class="empty">No passwords yet. Save your first one above.</li>'
+    : names.map((n) => `
+      <li class="site">
+        <div class="favicon">${escapeHtml(n.replace(/^www\./, '').charAt(0).toUpperCase() || '?')}</div>
+        <div class="meta">
+          <div class="name">${escapeHtml(n)}</div>
+          <div class="secret">${revealed[n] !== undefined ? escapeHtml(revealed[n]) : '••••••••••'}</div>
+        </div>
+        <button class="ghost" data-act="reveal" data-name="${escapeHtml(n)}">${revealed[n] !== undefined ? 'Hide' : 'Reveal'}</button>
+        <button class="ghost" data-act="copy" data-name="${escapeHtml(n)}">Copy</button>
+        <button class="ghost" data-act="edit" data-name="${escapeHtml(n)}">Edit</button>
+        <button class="ghost danger" data-act="remove" data-name="${escapeHtml(n)}">Delete</button>
+      </li>`).join('')
+
+  const opts = names.map((n) => `<option>${escapeHtml(n)}</option>`).join('')
+  $('swapA').innerHTML = opts
+  $('swapB').innerHTML = opts
+  if (names.length > 1) $('swapB').selectedIndex = 1
+}
+
+function applySnapshot (data) {
+  Object.assign(state, data, { open: true })
+  render()
+}
+
+// Tabs
+document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('active', x === b))
+  $('createForm').classList.toggle('hidden', b.dataset.tab !== 'create')
+  $('openForm').classList.toggle('hidden', b.dataset.tab !== 'open')
+}))
+
+$('createForm').addEventListener('submit', (e) => {
+  e.preventDefault()
+  if ($('newPw').value !== $('newPw2').value) return toast('The passwords do not match.', true)
+  busy(e.submitter, async () => {
+    applySnapshot(await api('/api/init', { password: $('newPw').value }))
+    $('attackPw').value = $('newPw').value
+    $('newPw').value = $('newPw2').value = ''
+    revealed = {}
+    toast('Vault created')
+  })
+})
+
+$('vaultFile').addEventListener('change', async () => {
+  const f = $('vaultFile').files[0]
+  if (!f) return
+  const text = await f.text()
+  try {
+    const parsed = JSON.parse(text)
+    if (parsed.repr) { $('reprInput').value = parsed.repr; $('checksumInput').value = parsed.checksum || '' } else { $('reprInput').value = text }
+  } catch (e) { $('reprInput').value = text }
+})
+
+$('useLastBtn').addEventListener('click', () => {
+  const last = recall('lastExport', null)
+  if (!last) return
+  $('reprInput').value = last.repr
+  $('checksumInput').value = last.checksum
+  toast('Loaded the last exported vault')
+})
+
+$('openForm').addEventListener('submit', (e) => {
+  e.preventDefault()
+  busy(e.submitter, async () => {
+    applySnapshot(await api('/api/load', { password: $('openPw').value, repr: $('reprInput').value, checksum: $('checksumInput').value }))
+    $('attackPw').value = $('openPw').value
+    $('openPw').value = ''
+    revealed = {}
+    toast('Vault unlocked')
+  })
+})
+
+$('lockBtn').addEventListener('click', async () => {
+  await api('/api/lock')
+  state = { open: false }
+  revealed = {}
+  $('attackPw').value = ''
+  render()
+  toast('Vault locked')
+})
+
+$('exportBtn').addEventListener('click', () => {
+  const payload = { repr: state.raw, checksum: state.checksum }
+  store('lastExport', payload)
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = 'vault.json'
+  a.click()
+  URL.revokeObjectURL(a.href)
+  toast('Exported vault.json (contents + checksum)')
+})
+
+$('toggleValue').addEventListener('click', () => {
+  const i = $('valueInput')
+  i.type = i.type === 'password' ? 'text' : 'password'
+  $('toggleValue').textContent = i.type === 'password' ? 'Show' : 'Hide'
+})
+
+$('genBtn').addEventListener('click', () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*-_=+'
+  const bytes = crypto.getRandomValues(new Uint32Array(20))
+  $('valueInput').value = Array.from(bytes, (b) => chars[b % chars.length]).join('')
+  $('valueInput').type = 'text'
+  $('toggleValue').textContent = 'Hide'
+})
+
+$('setForm').addEventListener('submit', (e) => {
+  e.preventDefault()
+  const name = $('siteInput').value.trim()
+  const value = $('valueInput').value
+  busy(e.submitter, async () => {
+    const data = await api('/api/set', { name, value })
+    Object.assign(state, data)
+    const names = siteNames()
+    if (!names.includes(name)) { names.push(name); names.sort(); saveSiteNames(names) }
+    delete revealed[name]
+    $('siteInput').value = $('valueInput').value = ''
+    $('valueInput').type = 'password'
+    $('toggleValue').textContent = 'Show'
+    render()
+    toast(`Saved password for ${name}`)
+  })
+})
+
+async function fetchValue (name) {
+  const { value } = await api('/api/get', { name })
+  return value
+}
+
+$('sites').addEventListener('click', async (e) => {
+  const b = e.target.closest('button')
+  if (!b) return
+  const name = b.dataset.name
+  try {
+    if (b.dataset.act === 'reveal') {
+      if (revealed[name] !== undefined) delete revealed[name]
+      else {
+        const v = await fetchValue(name)
+        if (v === null) { toast(`${name} is not in this vault`, true); return }
+        revealed[name] = v
+      }
+      render()
+    } else if (b.dataset.act === 'copy') {
+      const v = await fetchValue(name)
+      await navigator.clipboard.writeText(v || '')
+      toast('Password copied')
+    } else if (b.dataset.act === 'edit') {
+      $('siteInput').value = name
+      $('valueInput').focus()
+    } else if (b.dataset.act === 'remove') {
+      const data = await api('/api/remove', { name })
+      Object.assign(state, data)
+      saveSiteNames(siteNames().filter((n) => n !== name))
+      delete revealed[name]
+      render()
+      toast(`Deleted ${name}`)
+    }
+  } catch (err) { toast(err.message, true) }
+})
+
+$('lookupForm').addEventListener('submit', (e) => {
+  e.preventDefault()
+  const name = $('lookupInput').value.trim()
+  if (!name) return
+  busy(e.submitter, async () => {
+    const v = await fetchValue(name)
+    if (v === null) return toast(`No password stored for ${name}`, true)
+    const names = siteNames()
+    if (!names.includes(name)) { names.push(name); names.sort(); saveSiteNames(names) }
+    revealed[name] = v
+    $('lookupInput').value = ''
+    render()
+  })
+})
+
+function showResult (el, ok, html) {
+  el.className = 'result ' + (ok ? 'ok' : 'bad')
+  el.innerHTML = html
+}
+
+$('swapBtn').addEventListener('click', (e) => busy(e.target, async () => {
+  const r = await api('/api/attack/swap', { password: $('attackPw').value, a: $('swapA').value, b: $('swapB').value })
+  const ok = r.results.every((x) => x.ok)
+  showResult($('swapResult'), ok, (ok ? '<b>Blocked.</b> ' : '<b>Attack worked.</b> ') +
+    r.results.map((x) => `${escapeHtml(x.name)}: ${escapeHtml(x.detail)}`).join('<br>') +
+    '<br><span style="opacity:.8">Each record is authenticated with its own key as associated data, so moving it breaks decryption.</span>')
+}))
+
+$('rollbackBtn').addEventListener('click', (e) => busy(e.target, async () => {
+  const r = await api('/api/attack/rollback', { password: $('attackPw').value })
+  showResult($('rollbackResult'), r.ok, (r.ok ? '<b>Blocked.</b> ' : '<b>Attack worked.</b> ') + escapeHtml(r.detail))
+}))
+
+$('guessBtn').addEventListener('click', (e) => busy(e.target, async () => {
+  const r = await api('/api/attack/wrongpassword', { password: $('guessPw').value })
+  showResult($('guessResult'), r.ok, (r.ok ? '<b>Rejected.</b> ' : '<b>Unlocked.</b> ') + escapeHtml(r.detail))
+}))
+
+api('/api/status').then((s) => { if (s.open) applySnapshot(s); else render() }).catch(() => render())
+</script>
+</body>
+</html>
